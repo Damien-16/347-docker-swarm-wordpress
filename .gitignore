@@ -1,0 +1,16 @@
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Office temporary lock files
+~$*.xlsx
+~$*.docx
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
