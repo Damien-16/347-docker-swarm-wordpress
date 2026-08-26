@@ -18,3 +18,80 @@ Ce dépôt contient l'ensemble des fichiers de configuration et la documentation
 
 ---
 
+## Architecture de la solution
+
+L'infrastructure s'appuie sur trois nœuds Linux Debian :
+- **Manager (Debian 1)** : Orchestrateur du cluster Swarm, héberge le service MariaDB et Swarmpit.
+- **Worker 1 (Debian 2)** : Nœud de calcul hébergeant des répliques WordPress et Nginx.
+- **Worker 2 (Debian 3)** : Nœud de calcul hébergeant des répliques WordPress et Nginx.
+
+### Images officielles utilisées
+- **MariaDB** : `mariadb:12.0.1` (Base de données relationnelle)
+- **WordPress** : `wordpress:6.8.2-fpm-alpine` (Moteur applicatif PHP-FPM)
+- **Nginx** : `nginx:1.28.0-alpine3.21` (Reverse proxy HTTP & gestionnaire FastCGI)
+
+### Réseaux Overlay
+- **frontend** : Réseau overlay sécurisé reliant Nginx aux conteneurs WordPress.
+- **backend** : Réseau overlay isolé reliant WordPress à la base de données MariaDB.
+
+---
+
+## Prérequis
+
+- 3 machines virtuelles Linux Debian installées et joignables sur le réseau local.
+- Accès root ou privilèges `sudo` sur chaque machine.
+- Accès Internet pour télécharger les paquets et les images Docker.
+- Droits administrateur sur la machine hôte Windows (pour modifier le fichier `hosts`).
+
+---
+
+## Guide de Déploiement Étape-par-Étape
+
+### Étape 1 : Préparation des machines virtuelles Linux
+
+> À exécuter sur **les 3 machines** (`Debian 1`, `Debian 2`, `Debian 3`).
+
+1. **Mettre à jour le système d'exploitation** :
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y
+   ```
+
+2. **Installer les paquets prérequis pour Docker** :
+   ```bash
+   sudo apt-get install -y ca-certificates curl gnupg lsb-release
+   ```
+
+3. **Ajouter la clé GPG officielle de Docker** :
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+   ```
+
+4. **Configurer le dépôt officiel de Docker** :
+   ```bash
+   echo \
+     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+     $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   ```
+
+5. **Installer Docker Engine et le plugin Docker Compose** :
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   ```
+
+6. **Ajouter votre utilisateur courant au groupe docker** (évite d'utiliser `sudo` systématiquement) :
+   ```bash
+   sudo usermod -aG docker $USER
+   newgrp docker
+   ```
+
+7. **Activer et démarrer le service Docker au démarrage système** :
+   ```bash
+   sudo systemctl enable docker
+   sudo systemctl start docker
+   ```
+
+---
+
