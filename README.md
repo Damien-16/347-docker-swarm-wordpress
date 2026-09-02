@@ -123,3 +123,30 @@ L'infrastructure s'appuie sur trois nœuds Linux Debian :
 
 ---
 
+### Étape 3 : Configuration du volume partagé (NFS)
+
+Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble des nœuds :
+
+1. **Sur le Manager (`Debian 1`) : Installer et configurer le serveur NFS** :
+   ```bash
+   sudo apt-get install -y nfs-kernel-server
+   sudo mkdir -p /srv/nfs/wp_data
+   sudo chown -R 33:33 /srv/nfs/wp_data
+   sudo chmod -R 775 /srv/nfs/wp_data
+   ```
+   *Note : L'UID 33 correspond à l'utilisateur `www-data` sous Debian/Alpine.*
+
+2. **Déclarer l'export NFS** :
+   ```bash
+   echo "/srv/nfs/wp_data *(rw,sync,no_subtree_check,no_root_squash)" | sudo tee -a /etc/exports
+   sudo exportfs -arv
+   sudo systemctl restart nfs-kernel-server
+   ```
+
+3. **Sur les Workers (`Debian 2` et `Debian 3`) : Installer le client NFS** :
+   ```bash
+   sudo apt-get install -y nfs-common
+   ```
+
+---
+
