@@ -95,3 +95,31 @@ L'infrastructure s'appuie sur trois nœuds Linux Debian :
 
 ---
 
+### Étape 2 : Initialisation du cluster Docker Swarm
+
+1. **Sur le Manager (`Debian 1`)** :
+   Initialiser le cluster Swarm en spécifiant son adresse IP d'écoute :
+   ```bash
+   docker swarm init --advertise-addr <IP_DEBIAN_1>
+   ```
+   *Explication : Cette commande initialise le Swarm et affiche la commande exacte contenant le jeton (token) à copier pour joindre les workers.*
+
+2. **Pour réafficher la commande d'adhésion pour les workers si besoin** :
+   ```bash
+   docker swarm join-token worker
+   ```
+
+3. **Sur les deux Workers (`Debian 2` et `Debian 3`)** :
+   Coller la commande obtenue sur chaque worker :
+   ```bash
+   docker swarm join --token <TOKEN_FOURNI> <IP_DEBIAN_1>:2377
+   ```
+
+4. **Vérifier le statut du cluster (sur `Debian 1`)** :
+   ```bash
+   docker node ls
+   ```
+   *Résultat attendu : 3 nœuds listés avec le statut `Ready`, et `Debian 1` en tant que `Leader`.*
+
+---
+
