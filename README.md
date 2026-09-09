@@ -150,3 +150,22 @@ Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble d
 
 ---
 
+### Étape 4 : Création des réseaux et des secrets Docker
+
+> À exécuter sur le **Manager (`Debian 1`)**.
+
+1. **Créer les secrets Docker pour la base de données** :
+   ```bash
+   # Création d'un mot de passe fort pour l'administrateur root MariaDB
+   echo "SuperRootSecretPass347!" | docker secret create db_root_password -
+
+   # Création du mot de passe pour l'utilisateur applicatif WordPress
+   echo "WpUserSecretPass347!" | docker secret create db_password -
+   ```
+   *Vérifier la création des secrets :*
+   ```bash
+   docker secret ls
+   ```
+
+---
+

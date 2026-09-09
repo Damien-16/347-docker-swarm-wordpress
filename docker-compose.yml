@@ -1,0 +1,67 @@
+# ==============================================================================
+# PROJET DEVOPS 347 - ETML : Déploiement de WordPress Haute Disponibilité avec Docker Swarm
+# Fichier : docker-compose.yml
+# Description : Définition de la stack Docker Swarm multi-conteneurs pour WordPress
+# Images officielles requises : MariaDB 12.0.1, WordPress 6.8.2-fpm-alpine, Nginx 1.28.0-alpine3.21
+# ==============================================================================
+
+# Version du format du fichier Compose compatible Docker Swarm
+version: '3.8'
+
+# ------------------------------------------------------------------------------
+# SECTION SERVICES : Définition des conteneurs applicatifs formant la stack
+# ------------------------------------------------------------------------------
+services:
+
+
+  # Les conteneurs db, wordpress et nginx seront déclarés ci-dessous
+
+# ------------------------------------------------------------------------------
+# SECTION NETWORKS : Définition des réseaux virtuels overlay isolés
+# ------------------------------------------------------------------------------
+networks:
+  # Réseau frontend reliant le reverse proxy Nginx et le moteur WordPress
+  frontend:
+    # Driver overlay pour permettre la communication entre conteneurs sur des hôtes différents
+    driver: overlay
+    # Chiffrement optionnel des communications réseau entre nœuds
+    driver_opts:
+      encrypted: "true"
+
+  # Réseau backend reliant WordPress et MariaDB (totalement isolé d'Internet)
+  backend:
+    driver: overlay
+    driver_opts:
+      encrypted: "true"
+
+
+# ------------------------------------------------------------------------------
+# SECTION VOLUMES : Définition des volumes de persistance de données
+# ------------------------------------------------------------------------------
+volumes:
+  # Volume persistant dédié au stockage des fichiers de la base MariaDB
+  db_data:
+    driver: local
+
+  # Volume partagé NFS pour les fichiers WordPress (code et répertoire uploads médias)
+  # Ce volume garantit que toutes les répliques sur tous les nœuds accèdent aux mêmes médias
+  wp_data:
+    driver: local
+    driver_opts:
+      type: "nfs"
+      o: "addr=192.168.20.130,rw,nolock,soft"
+      device: ":/srv/nfs/wp_data"
+
+
+# ------------------------------------------------------------------------------
+# SECTION SECRETS : Déclaration des secrets gérés par Docker Swarm
+# ------------------------------------------------------------------------------
+secrets:
+  # Secret externe préalablement créé avec la commande 'docker secret create db_password ...'
+  db_password:
+    external: true
+
+  # Secret externe préalablement créé avec la commande 'docker secret create db_root_password ...'
+  db_root_password:
+    external: true
+
