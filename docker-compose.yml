@@ -14,7 +14,62 @@ version: '3.8'
 services:
 
 
-  # Les conteneurs db, wordpress et nginx seront déclarés ci-dessous
+  # ----------------------------------------------------------------------------
+  # SERVICE 1 : Base de données relationnelle MariaDB
+  # ----------------------------------------------------------------------------
+  db:
+    # Image officielle MariaDB demandée par le cahier des charges
+    image: mariadb:12.0.1
+
+    # Réseau d'attachement : uniquement le réseau backend pour isoler la DB d'Internet
+    networks:
+      - backend
+
+    # Volumes de persistance des données pour garantir la non-perte en cas de redémarrage
+    volumes:
+      # Stockage persistant des tables et données MySQL/MariaDB
+      - db_data:/var/lib/mysql
+
+    # Variables d'environnement pour initialiser la base et la configuration utilisateur
+    environment:
+      # Nom de la base de données WordPress à créer au démarrage
+      MARIADB_DATABASE: wordpress
+      # Nom de l'utilisateur dédié utilisé par WordPress pour se connecter
+      MARIADB_USER: wordpress
+      # Emplacement du mot de passe utilisateur fourni via un secret Docker
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      # Emplacement du mot de passe root administrateur fourni via un secret Docker
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+
+    # Secrets Docker injectés de façon chiffrée dans le conteneur sous /run/secrets/
+    secrets:
+      # Référence au secret contenant le mot de passe utilisateur
+      - db_password
+      # Référence au secret contenant le mot de passe root MariaDB
+      - db_root_password
+
+    # Paramètres de déploiement et d'orchestration pour Docker Swarm
+    deploy:
+      # Mode d'exécution répliqué (une seule instance pour éviter les conflits d'écriture DB)
+      mode: replicated
+      # Nombre d'instances en cours d'exécution
+      replicas: 1
+      # Contraintes de placement du service dans le cluster Swarm
+      placement:
+        constraints:
+          # Exécution restreinte au nœud manager (où le stockage local persistant est présent)
+          - node.role == manager
+      # Politique de redémarrage automatique en cas d'incident
+      restart_policy:
+        # Redémarre uniquement si le conteneur subit un crash (code retour != 0)
+        condition: on-failure
+        # Délai d'attente avant tentative de relance
+        delay: 5s
+        # Nombre maximum de tentatives avant abandon
+        max_attempts: 3
+        # Fenêtre temporelle pour évaluer si le service a démarré avec succès
+        window: 120s
+
 
 # ------------------------------------------------------------------------------
 # SECTION NETWORKS : Définition des réseaux virtuels overlay isolés
