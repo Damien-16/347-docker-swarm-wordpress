@@ -71,6 +71,62 @@ services:
         window: 120s
 
 
+  # ----------------------------------------------------------------------------
+  # SERVICE 2 : Moteur applicatif WordPress (variante PHP-FPM ultra légère Alpine)
+  # ----------------------------------------------------------------------------
+  wordpress:
+    # Image officielle WordPress FPM Alpine imposée par le cahier des charges
+    image: wordpress:6.8.2-fpm-alpine
+
+    # Connexion aux deux réseaux : backend pour joindre MariaDB et frontend pour communiquer avec Nginx
+    networks:
+      - backend
+      - frontend
+
+    # Montage du volume partagé pour le code source et les médias (uploads, thèmes, extensions)
+    volumes:
+      # Volume partagé accessible également par le service Nginx pour servir les assets statiques
+      - wp_data:/var/www/html
+
+    # Variables d'environnement pour l'initialisation et la liaison avec la base de données
+    environment:
+      # Hôte et port de la base de données (utilise le nom du service Docker Swarm 'db')
+      WORDPRESS_DB_HOST: db:3306
+      # Nom de la base de données WordPress à utiliser
+      WORDPRESS_DB_NAME: wordpress
+      # Nom du compte utilisateur de la base
+      WORDPRESS_DB_USER: wordpress
+      # Chemin vers le secret Docker contenant le mot de passe utilisateur
+      WORDPRESS_DB_PASSWORD_FILE: /run/secrets/db_password
+
+    # Secret contenant le mot de passe de connexion à la base de données
+    secrets:
+      - db_password
+
+    # Paramètres d'orchestration Swarm pour la haute disponibilité et tolérance aux pannes
+    deploy:
+      # Mode répliqué pour distribuer la charge applicative
+      mode: replicated
+      # Déploiement de 3 répliques pour assurer la redondance et la tolérance aux pannes
+      replicas: 3
+      # Configuration de la mise à jour progressive (Rolling Update) sans coupure de service
+      update_config:
+        # Mise à jour de 1 conteneur à la fois
+        parallelism: 1
+        # Délai d'attente entre la mise à jour de chaque réplique
+        delay: 10s
+        # Action en cas d'erreur de déploiement : retour arrière automatique
+        failure_action: rollback
+        # Ordre des opérations : démarrer le nouveau conteneur avant d'arrêter l'ancien
+        order: start-first
+      # Politique de redémarrage automatique
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+
 # ------------------------------------------------------------------------------
 # SECTION NETWORKS : Définition des réseaux virtuels overlay isolés
 # ------------------------------------------------------------------------------
