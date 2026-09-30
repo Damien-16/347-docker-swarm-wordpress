@@ -169,3 +169,40 @@ Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble d
 
 ---
 
+### Étape 5 : Déploiement de la stack WordPress
+
+> À exécuter sur le **Manager (`Debian 1`)**.
+
+1. **Récupérer le dépôt Git du projet** :
+   ```bash
+   git clone https://github.com/Damien-16/347-docker-swarm-wordpress.git
+   cd 347-docker-swarm-wordpress
+   ```
+
+2. **Vérifier l'arborescence des fichiers** :
+   ```
+   .
+   ├── docker-compose.yml
+   ├── nginx
+   │   └── default.conf
+   ├── README.md
+   └── jdt_nom_prénom.xlsx
+   ```
+
+3. **Déployer la stack via Docker CLI** :
+   ```bash
+   docker stack deploy -c docker-compose.yml wp_stack
+   ```
+
+4. **Vérifier le statut du déploiement des services** :
+   ```bash
+   docker stack services wp_stack
+   ```
+
+5. **Visualiser la répartition des conteneurs sur les nœuds** :
+   ```bash
+   docker stack ps wp_stack
+   ```
+
+---
+
