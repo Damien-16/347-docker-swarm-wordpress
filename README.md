@@ -206,3 +206,22 @@ Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble d
 
 ---
 
+### Étape 6 : Déploiement de l'interface d'administration Swarmpit
+
+Conformément au cahier des charges, l'interface graphique open-source **Swarmpit** est installée en ligne de commande (CLI).
+
+> À exécuter sur le **Manager (`Debian 1`)**.
+
+```bash
+docker run -it --rm \
+  --name swarmpit-installer \
+  --volume /var/run/docker.sock:/var/run/docker.sock \
+  swarmpit/install:1.9
+```
+
+*Suivre les invites du script d'installation (valider les ports par défaut : port `8888`).*
+Une fois installé, Swarmpit est accessible sur votre navigateur à l'adresse :
+`http://<IP_DEBIAN_1>:8888`
+
+---
+
