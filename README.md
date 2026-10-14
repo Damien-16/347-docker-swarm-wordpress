@@ -225,3 +225,67 @@ Une fois installé, Swarmpit est accessible sur votre navigateur à l'adresse :
 
 ---
 
+### Étape 7 : Configuration DNS et accès utilisateur
+
+1. **Sur votre machine Windows (machine hôte)** :
+   - Ouvrir un bloc-notes ou PowerShell **en mode Administrateur**.
+   - Ouvrir le fichier : `C:\Windows\System32\drivers\etc\hosts`.
+   - Ajouter la ligne suivante (remplacer `<IP_DEBIAN_1>` par l'IP réelle du manager) :
+     ```text
+     <IP_DEBIAN_1>   www.my-wordpress.ch
+     ```
+
+2. **Accéder à WordPress** :
+   - Ouvrir votre navigateur sur la machine Windows et naviguer vers :
+     **http://www.my-wordpress.ch**
+   - L'écran de configuration initiale de WordPress s'affiche.
+   - Suivre les étapes pour nommer le site, créer le premier compte administrateur et valider l'installation.
+
+---
+
+## Étape 8 : Procédure de suppression totale de la stack et des volumes
+
+Conformément à l'exigence 7.3.4 du cahier des charges, voici les commandes nécessaires pour désinstaller et purger entièrement l'ensemble des ressources créées :
+
+### 1. Supprimer la stack WordPress
+```bash
+# Suppression de l'ensemble des services de la stack
+docker stack rm wp_stack
+```
+
+### 2. Supprimer la stack Swarmpit (si nécessaire)
+```bash
+docker stack rm swarmpit
+```
+
+### 3. Attendre la résiliation des conteneurs
+```bash
+# Vérifier qu'aucun conteneur de la stack ne tourne encore
+docker ps
+```
+
+### 4. Supprimer les volumes persistants associés
+```bash
+# Suppression des volumes Docker
+docker volume rm wp_stack_db_data wp_stack_wp_data
+
+# Ou purger tous les volumes non utilisés
+docker volume prune -f
+```
+
+### 5. Supprimer les secrets Docker
+```bash
+docker secret rm db_password db_root_password
+```
+
+### 6. Supprimer les données locales sur le serveur NFS (optionnel)
+```bash
+sudo rm -rf /srv/nfs/wp_data/*
+```
+
+---
+
+## Auteur & Projet
+- **Formation** : ETML / Module DevOps 347
+- **Auteur** : Damien
+- **Dépôt** : [347-docker-swarm-wordpress](https://github.com/Damien-16/347-docker-swarm-wordpress)
