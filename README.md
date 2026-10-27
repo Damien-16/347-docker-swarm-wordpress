@@ -271,13 +271,24 @@ docker ps
 ```
 
 ### 4. Supprimer les volumes persistants associés
-```bash
-# Suppression des volumes Docker
-docker volume rm wp_stack_db_data wp_stack_wp_data
 
-# Ou purger tous les volumes non utilisés
-docker volume prune -f
-```
+> **Important** : Attendre que `docker ps` ne liste plus aucun conteneur de la stack (sinon Docker renverra une erreur `volume is in use`).
+> Docker Swarm créant le volume NFS localement sur chaque nœud où s'est exécuté un conteneur, la suppression doit être effectuée sur l'ensemble du cluster :
+
+- **Sur le Manager (`Debian 1`)** :
+  ```bash
+  docker volume rm wp_stack_db_data wp_stack_wp_data
+  ```
+
+- **Sur les Workers (`Debian 2` et `Debian 3`)** :
+  ```bash
+  docker volume rm wp_stack_wp_data
+  ```
+
+- *(Optionnel)* Purger les volumes orphelins non utilisés sur chaque machine :
+  ```bash
+  docker volume prune -f
+  ```
 
 ### 5. Supprimer les secrets Docker
 ```bash
