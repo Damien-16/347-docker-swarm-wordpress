@@ -1,223 +1,142 @@
-# 347-docker-swarm-wordpress - Déploiement WordPress Haute Disponibilité avec Docker Swarm
+# 347-docker-swarm-wordpress
 
-Ce dépôt contient l'ensemble des fichiers de configuration et la documentation nécessaire pour le déploiement d'une architecture WordPress hautement disponible, résiliente et évolutive sur un cluster **Docker Swarm** de 3 nœuds (1 Manager et 2 Workers).
+## Étape 1 : Préparation des machines
 
----
+À faire sur chaque VM :
 
-## Sommaire
-1. [Architecture de la solution](#architecture-de-la-solution)
-2. [Prérequis](#prérequis)
-3. [Étape 1 : Préparation des machines virtuelles Linux](#étape-1--préparation-des-machines-virtuelles-linux)
-4. [Étape 2 : Initialisation du cluster Docker Swarm](#étape-2--initialisation-du-cluster-docker-swarm)
-5. [Étape 3 : Configuration du volume partagé (NFS)](#étape-3--configuration-du-volume-partagé-nfs)
-6. [Étape 4 : Création des réseaux et des secrets Docker](#étape-4--création-des-réseaux-et-des-secrets-docker)
-7. [Étape 5 : Déploiement de la stack WordPress](#étape-5--déploiement-de-la-stack-wordpress)
-8. [Étape 6 : Déploiement de l'interface d'administration Swarmpit](#étape-6--déploiement-de-linterface-dadministration-swarmpit)
-9. [Étape 7 : Configuration DNS et accès utilisateur](#étape-7--configuration-dns-et-accès-utilisateur)
-10. [Étape 8 : Procédure de suppression totale de la stack et des volumes](#étape-8--procédure-de-suppression-totale-de-la-stack-et-des-volumes)
+```bash
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install -y ca-certificates curl gnupg lsb-release git keepalived nfs-common
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+```
 
----
-
-## Architecture de la solution
-
-L'infrastructure s'appuie sur trois nœuds Linux Debian :
-- **Manager (Debian 1)** : Orchestrateur du cluster Swarm, héberge le service MariaDB et Swarmpit.
-- **Worker 1 (Debian 2)** : Nœud de calcul hébergeant des répliques WordPress et Nginx.
-- **Worker 2 (Debian 3)** : Nœud de calcul hébergeant des répliques WordPress et Nginx.
-
-### Images officielles utilisées
-- **MariaDB** : `mariadb:12.0.1-rc` (Base de données relationnelle - tag officiel Docker Hub pour la version 12.0.1)
-- **WordPress** : `wordpress:6.8.2-fpm-alpine` (Moteur applicatif PHP-FPM)
-- **Nginx** : `nginx:1.28.0-alpine3.21` (Reverse proxy HTTP & gestionnaire FastCGI)
-
-### Réseaux Overlay
-- **frontend** : Réseau overlay sécurisé reliant Nginx aux conteneurs WordPress.
-- **backend** : Réseau overlay isolé reliant WordPress à la base de données MariaDB.
+Compatibilité API pour Swarmpit :
+```bash
+echo '{"min-api-version": "1.30"}' | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker
+sudo systemctl enable docker
+```
 
 ---
 
-## Prérequis
+## Étape 2 : Initialisation du cluster Docker Swarm
 
-- 3 machines virtuelles Linux Debian installées et joignables sur le réseau local.
-- Accès root ou privilèges `sudo` sur chaque machine.
-- Accès Internet pour télécharger les paquets et les images Docker.
-- Droits administrateur sur la machine hôte Windows (pour modifier le fichier `hosts`).
-
----
-
-## Guide de Déploiement Étape-par-Étape
-
-### Étape 1 : Préparation des machines virtuelles Linux
-
-> À exécuter sur **les 3 machines** (`Debian 1`, `Debian 2`, `Debian 3`).
-
-1. **Mettre à jour le système d'exploitation** :
+1. **Sur le Manager** :
    ```bash
-   sudo apt-get update && sudo apt-get upgrade -y
+   docker swarm init --advertise-addr <IP_MANAGER>
    ```
 
-2. **Installer les paquets prérequis pour Docker** :
+2. **Sur les Workers** :
    ```bash
-   sudo apt-get install -y ca-certificates curl gnupg lsb-release git
+   docker swarm join --token <TOKEN_FOURNI> <IP_MANAGER>:2377
    ```
 
-3. **Ajouter la clé GPG officielle de Docker** :
+3. **Haute Disponibilité Swarm** :
+   Pour que le cluster continue de tourner même si la VM Manager s'arrête, on promeut les 2 workers au rôle de Manager :
    ```bash
-   sudo install -m 0755 -d /etc/apt/keyrings
-   curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-   sudo chmod a+r /etc/apt/keyrings/docker.gpg
+   docker node promote <NOM_WORKER_1> <NOM_WORKER_2>
    ```
 
-4. **Configurer le dépôt officiel de Docker** :
+4. **Label pour MariaDB** :
    ```bash
-   echo \
-     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-     $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-   ```
-
-5. **Installer Docker Engine et le plugin Docker Compose** :
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-   ```
-
-6. **Ajouter votre utilisateur courant au groupe docker** (évite d'utiliser `sudo` systématiquement) :
-   ```bash
-   sudo usermod -aG docker $USER
-   newgrp docker
-   ```
-
-7. **Activer et démarrer le service Docker au démarrage système** :
-   ```bash
-   sudo systemctl enable docker
-   sudo systemctl start docker
+   docker node update --label-add db=true <NOM_WORKER_1>
    ```
 
 ---
 
-### Étape 2 : Initialisation du cluster Docker Swarm
+## Étape 3 : Haute Disponibilité Réseau 
 
-1. **Sur le Manager (`Debian 1`)** :
-   Initialiser le cluster Swarm en spécifiant son adresse IP d'écoute :
-   ```bash
-   docker swarm init --advertise-addr <IP_DEBIAN_1>
-   ```
-   *Explication : Cette commande initialise le Swarm et affiche la commande exacte contenant le jeton (token) à copier pour joindre les workers.*
+Pour que l'adresse reste joignable si le Manager tombe, on utilise une IP virtuelle partagée (`<IP_VIRTUELLE_VIP>`).
 
-2. **Pour réafficher la commande d'adhésion pour les workers si besoin** :
-   ```bash
-   docker swarm join-token worker
-   ```
+### Sur le Manager :
+Créer `/etc/keepalived/keepalived.conf` :
+```text
+vrrp_instance VI_1 {
+    state MASTER
+    interface <INTERFACE_RESEAU>
+    virtual_router_id 51
+    priority 101
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 347ETML
+    }
+    virtual_ipaddress {
+        <IP_VIRTUELLE_VIP>/24 dev <INTERFACE_RESEAU>
+    }
+}
+```
+Lancer le service :
+```bash
+sudo systemctl enable --now keepalived
+```
 
-3. **Sur les deux Workers (`Debian 2` et `Debian 3`)** :
-   Coller la commande obtenue sur chaque worker :
-   ```bash
-   docker swarm join --token <TOKEN_FOURNI> <IP_DEBIAN_1>:2377
-   ```
-
-4. **Vérifier le statut du cluster (sur `Debian 1`)** :
-   ```bash
-   docker node ls
-   ```
-   *Résultat attendu : 3 nœuds listés avec le statut `Ready`, et `Debian 1` en tant que `Leader`.*
+Sur **Worker 1** et **Worker 2**, appliquer la même configuration avec `state BACKUP` et des priorités 100 et 99.
 
 ---
 
-### Étape 3 : Configuration du volume partagé (NFS)
+## Étape 4 : Volume partagé NFS
 
-Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble des nœuds :
+Pour stocker les fichiers WordPress et médias :
 
-1. **Sur le Manager (`Debian 1`) : Installer et configurer le serveur NFS** :
+1. **Sur Worker 1 (serveur NFS)** :
    ```bash
    sudo apt-get install -y nfs-kernel-server
    sudo mkdir -p /srv/nfs/wp_data
    sudo chown -R 33:33 /srv/nfs/wp_data
    sudo chmod -R 775 /srv/nfs/wp_data
-   ```
-   *Note : L'UID 33 correspond à l'utilisateur `www-data` sous Debian/Alpine.*
-
-2. **Déclarer l'export NFS** :
-   ```bash
    echo "/srv/nfs/wp_data *(rw,sync,no_subtree_check,no_root_squash)" | sudo tee -a /etc/exports
    sudo exportfs -arv
    sudo systemctl restart nfs-kernel-server
    ```
 
-3. **Sur les Workers (`Debian 2` et `Debian 3`) : Installer le client NFS** :
+2. **Sur le Manager et Worker 2 (clients)** :
    ```bash
    sudo apt-get install -y nfs-common
    ```
 
 ---
 
-### Étape 4 : Création des réseaux et des secrets Docker
+## Étape 5 : Secrets Docker
 
-> À exécuter sur le **Manager (`Debian 1`)**.
-
-1. **Créer les secrets Docker pour la base de données** :
-   ```bash
-   # Création d'un mot de passe fort pour l'administrateur root MariaDB
-   echo "SuperRootSecretPass347!" | docker secret create db_root_password -
-
-   # Création du mot de passe pour l'utilisateur applicatif WordPress
-   echo "WpUserSecretPass347!" | docker secret create db_password -
-   ```
-   *Vérifier la création des secrets :*
-   ```bash
-   docker secret ls
-   ```
+Depuis le Manager :
+```bash
+echo "SuperRootSecretPass347!" | docker secret create db_root_password -
+echo "WpUserSecretPass347!" | docker secret create db_password -
+```
 
 ---
 
-### Étape 5 : Déploiement de la stack WordPress
+## Étape 6 : Déploiement de la stack WordPress
 
-> À exécuter sur le **Manager (`Debian 1`)**.
-
-1. **Récupérer le dépôt Git du projet** :
+1. **Récupérer le projet** :
    ```bash
    git clone https://github.com/Damien-16/347-docker-swarm-wordpress.git
    cd 347-docker-swarm-wordpress
    ```
 
-2. **Vérifier l'arborescence des fichiers** :
-   ```
-   .
-   ├── docker-compose.yml
-   ├── nginx
-   │   └── default.conf
-   ├── README.md
-   └── jdt_nom_prénom.xlsx
-   ```
-
-3. **Configurer l'IP du serveur NFS et déployer la stack via Docker CLI** :
-   Le fichier `docker-compose.yml` utilise la variable `${NFS_SERVER_IP:-192.168.20.130}`. Vous pouvez exporter l'adresse IP de votre Manager (`Debian 1`) pour adapter automatiquement le montage NFS à votre environnement (école ETML ou domicile) :
+2. **Déployer la stack** :
    ```bash
-   # Définir l'IP du serveur NFS (IP de Debian 1)
-   export NFS_SERVER_IP=$(hostname -I | awk '{print $1}')
-
-   # Déployer la stack
+   export NFS_SERVER_IP=<IP_WORKER_1>
    docker stack deploy -c docker-compose.yml wp_stack
    ```
-   > **Note sur MariaDB 12.0.1** : Conformément au cahier des charges, l'image MariaDB version 12.0.1 est utilisée via son tag officiel Docker Hub `mariadb:12.0.1-rc` (la branche 12.0.1 n'ayant été publiée par MariaDB qu'en version Release Candidate).
 
-4. **Vérifier le statut du déploiement des services** :
+3. **Vérifier les services** :
    ```bash
    docker stack services wp_stack
    ```
 
-5. **Visualiser la répartition des conteneurs sur les nœuds** :
-   ```bash
-   docker stack ps wp_stack
-   ```
-
 ---
 
-### Étape 6 : Déploiement de l'interface d'administration Swarmpit
+## Étape 7 : Interface Swarmpit
 
-Conformément au cahier des charges, l'interface graphique open-source **Swarmpit** est installée en ligne de commande (CLI).
-
-> À exécuter sur le **Manager (`Debian 1`)**.
-
+Déploiement en ligne de commande :
 ```bash
 docker run -it --rm \
   --name swarmpit-installer \
@@ -225,87 +144,48 @@ docker run -it --rm \
   swarmpit/install:1.9
 ```
 
-*Suivre les invites du script d'installation (valider les ports par défaut : port `8888`).*
-Une fois installé, Swarmpit est accessible sur votre navigateur à l'adresse :
-`http://<IP_DEBIAN_1>:8888`
+L'interface est accessible sur : `http://<IP_VIRTUELLE_VIP>:888`
 
 ---
 
-### Étape 7 : Configuration DNS et accès utilisateur
+## Étape 8 : Configuration DNS et Démonstration de tolérance de panne
 
-1. **Sur votre machine Windows (machine hôte)** :
-   - Ouvrir un bloc-notes ou PowerShell **en mode Administrateur**.
-   - Ouvrir le fichier : `C:\Windows\System32\drivers\etc\hosts`.
-   - Ajouter la ligne suivante (remplacer `<IP_DEBIAN_1>` par l'IP réelle du manager) :
-     ```text
-     <IP_DEBIAN_1>   www.my-wordpress.ch
-     ```
+1. **Sur Windows (`C:\Windows\System32\drivers\etc\hosts`)** :
+   Ajouter la ligne :
+   ```text
+   <IP_VIRTUELLE_VIP>   www.my-wordpress.ch
+   ```
 
-2. **Accéder à WordPress** :
-   - Ouvrir votre navigateur sur la machine Windows et naviguer vers :
-     **http://www.my-wordpress.ch**
-   - L'écran de configuration initiale de WordPress s'affiche.
-   - Suivre les étapes pour nommer le site, créer le premier compte administrateur et valider l'installation.
+2. **Accès au site** :
+   Ouvrir le navigateur sur **http://www.my-wordpress.ch**.
+
+3. **Test d'arrêt du Manager** :
+   Éteindre la VM Manager (`sudo poweroff`).
+   L'IP virtuelle bascule automatiquement sur Worker 1 et le site continue de fonctionner sans interruption.
 
 ---
 
-## Étape 8 : Procédure de suppression totale de la stack et des volumes
+## Étape 9 : Suppression de la stack et des volumes
 
-Conformément à l'exigence 7.3.4 du cahier des charges, voici les commandes nécessaires pour désinstaller et purger entièrement l'ensemble des ressources créées :
-
-### 1. Supprimer la stack WordPress
 ```bash
-# Suppression de l'ensemble des services de la stack
+# 1. Supprimer les stacks
 docker stack rm wp_stack
-```
-
-### 2. Supprimer la stack Swarmpit (si nécessaire)
-```bash
 docker stack rm swarmpit
-```
 
-### 3. Attendre la résiliation des conteneurs
-```bash
-# Vérifier qu'aucun conteneur de la stack ne tourne encore
-docker ps
-```
+# 2. Supprimer les volumes persistants
+docker volume rm wp_stack_db_data wp_stack_wp_data
 
-### 4. Supprimer les volumes persistants associés
-
-> **Important** : Attendre que `docker ps` ne liste plus aucun conteneur de la stack (sinon Docker renverra une erreur `volume is in use`).
-> Docker Swarm créant le volume NFS localement sur chaque nœud où s'est exécuté un conteneur, la suppression doit être effectuée sur l'ensemble du cluster :
-
-- **Sur le Manager (`Debian 1`)** :
-  ```bash
-  docker volume rm wp_stack_db_data wp_stack_wp_data
-  ```
-
-- **Sur les Workers (`Debian 2` et `Debian 3`)** :
-  ```bash
-  docker volume rm wp_stack_wp_data
-  ```
-
-- *(Optionnel)* Purger les volumes orphelins non utilisés sur chaque machine :
-  ```bash
-  docker volume prune -f
-  ```
-
-### 5. Supprimer les secrets Docker
-```bash
+# 3. Supprimer les secrets
 docker secret rm db_password db_root_password
-```
 
-### 6. Supprimer les données locales sur le serveur NFS (optionnel)
-```bash
+# 4. Nettoyer les données locales NFS (optionnel)
 sudo rm -rf /srv/nfs/wp_data/*
 ```
 
 ---
 
-## Auteur & Projet
-- **Formation** : ETML / Module DevOps 347
-- **Auteur** : Damien
-- **Dépôt** : [347-docker-swarm-wordpress](https://github.com/Damien-16/347-docker-swarm-wordpress)
+### Utilisation de l'IA
+J'ai utilisé de l'IA comme tuteur afin de m'aider avec certains concept/commandes que je connaissais pas encore.
 
-### Mention relative aux outils d'IA (Conformité CdC Chapitre 8.3)
-Conformément à la directive du cahier des charges : *« Le recours à des outils en ligne d'intelligence artificielle doit être mentionné et ne peut servir que d'inspiration à la réalisation »*. Une assistance IA a été consultée pour l'audit architectural, l'optimisation des commentaires de configuration et la validation des options NFS et Docker Swarm.
+### Conclusion personelle
+J'ai trouvé que ce projet a été très intéressant à découvrir et pratiquer, j'ai appris plain de chose.

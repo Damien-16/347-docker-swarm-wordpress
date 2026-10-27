@@ -56,16 +56,16 @@ services:
       # Contraintes de placement du service dans le cluster Swarm
       placement:
         constraints:
-          # Exécution restreinte au nœud manager (où le stockage local persistant est présent)
-          - node.role == manager
+          # Exécution sur le nœud worker 1 dédié aux données (immunise MariaDB contre l'arrêt du manager)
+          - node.labels.db == true
       # Politique de redémarrage automatique en cas d'incident
       restart_policy:
-        # Redémarre uniquement si le conteneur subit un crash (code retour != 0)
-        condition: on-failure
+        # Redémarre toujours le conteneur automatiquement
+        condition: any
         # Délai d'attente avant tentative de relance
         delay: 5s
         # Nombre maximum de tentatives avant abandon
-        max_attempts: 3
+        max_attempts: 5
         # Fenêtre temporelle pour évaluer si le service a démarré avec succès
         window: 120s
 
@@ -119,9 +119,9 @@ services:
         order: start-first
       # Politique de redémarrage automatique
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 3
+        max_attempts: 5
         window: 120s
 
   # ----------------------------------------------------------------------------
@@ -167,9 +167,9 @@ services:
         failure_action: rollback
       # Politique de redémarrage
       restart_policy:
-        condition: on-failure
+        condition: any
         delay: 5s
-        max_attempts: 3
+        max_attempts: 5
         window: 120s
 
 # ------------------------------------------------------------------------------
@@ -204,7 +204,7 @@ volumes:
     driver: local
     driver_opts:
       type: "nfs"
-      o: "addr=${NFS_SERVER_IP:-192.168.20.130},rw,nolock,soft"
+      o: "addr=${NFS_SERVER_IP:-192.168.1.232},rw,nolock,soft"
       device: ":/srv/nfs/wp_data"
 
 # ------------------------------------------------------------------------------
