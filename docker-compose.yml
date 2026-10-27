@@ -17,8 +17,8 @@ services:
   # SERVICE 1 : Base de données relationnelle MariaDB
   # ----------------------------------------------------------------------------
   db:
-    # Image officielle MariaDB demandée par le cahier des charges
-    image: mariadb:12.0.1
+    # Image officielle MariaDB demandée par le cahier des charges (tag officiel Docker Hub 12.0.1-rc)
+    image: mariadb:12.0.1-rc
 
     # Réseau d'attachement : uniquement le réseau backend pour isoler la DB d'Internet
     networks:
@@ -204,7 +204,7 @@ volumes:
     driver: local
     driver_opts:
       type: "nfs"
-      o: "addr=192.168.20.130,rw,nolock,soft"
+      o: "addr=${NFS_SERVER_IP:-192.168.20.130},rw,nolock,soft"
       device: ":/srv/nfs/wp_data"
 
 # ------------------------------------------------------------------------------

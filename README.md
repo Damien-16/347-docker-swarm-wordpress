@@ -26,7 +26,7 @@ L'infrastructure s'appuie sur trois nœuds Linux Debian :
 - **Worker 2 (Debian 3)** : Nœud de calcul hébergeant des répliques WordPress et Nginx.
 
 ### Images officielles utilisées
-- **MariaDB** : `mariadb:12.0.1` (Base de données relationnelle)
+- **MariaDB** : `mariadb:12.0.1-rc` (Base de données relationnelle - tag officiel Docker Hub pour la version 12.0.1)
 - **WordPress** : `wordpress:6.8.2-fpm-alpine` (Moteur applicatif PHP-FPM)
 - **Nginx** : `nginx:1.28.0-alpine3.21` (Reverse proxy HTTP & gestionnaire FastCGI)
 
@@ -189,10 +189,16 @@ Pour permettre la persistance des fichiers WordPress et médias sur l'ensemble d
    └── jdt_nom_prénom.xlsx
    ```
 
-3. **Déployer la stack via Docker CLI** :
+3. **Configurer l'IP du serveur NFS et déployer la stack via Docker CLI** :
+   Le fichier `docker-compose.yml` utilise la variable `${NFS_SERVER_IP:-192.168.20.130}`. Vous pouvez exporter l'adresse IP de votre Manager (`Debian 1`) pour adapter automatiquement le montage NFS à votre environnement (école ETML ou domicile) :
    ```bash
+   # Définir l'IP du serveur NFS (IP de Debian 1)
+   export NFS_SERVER_IP=$(hostname -I | awk '{print $1}')
+
+   # Déployer la stack
    docker stack deploy -c docker-compose.yml wp_stack
    ```
+   > **Note sur MariaDB 12.0.1** : Conformément au cahier des charges, l'image MariaDB version 12.0.1 est utilisée via son tag officiel Docker Hub `mariadb:12.0.1-rc` (la branche 12.0.1 n'ayant été publiée par MariaDB qu'en version Release Candidate).
 
 4. **Vérifier le statut du déploiement des services** :
    ```bash
@@ -289,3 +295,6 @@ sudo rm -rf /srv/nfs/wp_data/*
 - **Formation** : ETML / Module DevOps 347
 - **Auteur** : Damien
 - **Dépôt** : [347-docker-swarm-wordpress](https://github.com/Damien-16/347-docker-swarm-wordpress)
+
+### Mention relative aux outils d'IA (Conformité CdC Chapitre 8.3)
+Conformément à la directive du cahier des charges : *« Le recours à des outils en ligne d'intelligence artificielle doit être mentionné et ne peut servir que d'inspiration à la réalisation »*. Une assistance IA a été consultée pour l'audit architectural, l'optimisation des commentaires de configuration et la validation des options NFS et Docker Swarm.
