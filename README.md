@@ -58,7 +58,7 @@ L'infrastructure s'appuie sur trois nœuds Linux Debian :
 
 2. **Installer les paquets prérequis pour Docker** :
    ```bash
-   sudo apt-get install -y ca-certificates curl gnupg lsb-release
+   sudo apt-get install -y ca-certificates curl gnupg lsb-release git
    ```
 
 3. **Ajouter la clé GPG officielle de Docker** :
